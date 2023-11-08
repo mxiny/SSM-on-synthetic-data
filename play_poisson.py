@@ -21,7 +21,7 @@ def split_data(data):
 
  # %%
 if __name__ == "__main__":
-    path_prefix = "/home/jamie/Code/rSLDS/synth/"
+    path_prefix = "/home/jamie/Code/rSLDS/synth/"   # change to your own project path
     data = sio.loadmat(path_prefix + "data/synth_poisson/ObsDim10_Q0_01_Rate2.mat")
     Xs = data["Xs"]
     Zs = data["Zs"]
@@ -68,7 +68,7 @@ if __name__ == "__main__":
     print("Training ELBO = %.3f, Testing ELBO = %.3f, R^2 = %.4f, expected R^2 = %.4f, MAE = %.3f" %
           (train_elbos_K3, test_elbos_K3, R2s_K3[0], eR2s_K3[0], maes_K3[0]))
     
-    # %%
+    # %% visualize the comparison of estimated latent dynamic between lds and rslds
     with open(lds_path + str(elbo_ids_K1[0][1]) + ".dill", 'rb') as f:
         lds = dill.load(f)
 
@@ -77,7 +77,8 @@ if __name__ == "__main__":
     
     lds_err = 0
     rslds_err = 0
-    for i in range(1):
+    # frist 5 test trials
+    for i in range(5):
         elbo_test, q_test = lds.approximate_posterior(y_test[i],                      
                                                     num_iters=10,
                                                     continuous_tolerance=1e-12,
@@ -112,39 +113,39 @@ if __name__ == "__main__":
     print("LDS inference error (MAE) = %.3f" % lds_err)
     print("rSLDS inference error (MAE) = %.3f" % rslds_err)
 
-    # %%
+    # %% visualize the comparison of predictions between lds and rslds
     tr = 0 # trial id
     index = list(range(10, y_test[0].shape[tr]-predict_len, 30))
     lds_y = np.zeros((len(index), predict_len, y_test[0].shape[1]))
     rslds_y = np.zeros((len(index), predict_len, y_test[0].shape[1]))
     for j, t in enumerate(index):
-            elbo_test, q_test = lds.approximate_posterior(y_test[tr][:t, :],                                                       
-                                                num_iters=10,
-                                                continuous_tolerance=1e-12,
-                                                continuous_maxiter=400,
-                                                verbose=0)
-            x_infer = q_test.mean_continuous_states[0]
-            z_infer = lds.most_likely_states(x_infer, y_test[tr][:t, :])
-            prefix = [z_infer[:t], x_infer[:t], y_test[tr][:t, :]]
-            z_pred, x_pred, _ = lds.sample(predict_len, prefix=prefix, with_noise=False)
-            r_pred = lds.emissions.mean(np.matmul(lds.emissions.Cs[None, ...], x_pred[:, None, :, None])[:, :, :, 0] 
-                + lds.emissions.ds).squeeze()
-
-            lds_y[j] = r_pred
+        # LDS
+        elbo_test, q_test = lds.approximate_posterior(y_test[tr][:t, :],                                                       
+                                            num_iters=10,
+                                            continuous_tolerance=1e-12,
+                                            continuous_maxiter=400,
+                                            verbose=0)
+        x_infer = q_test.mean_continuous_states[0]
+        z_infer = lds.most_likely_states(x_infer, y_test[tr][:t, :])
+        prefix = [z_infer[:t], x_infer[:t], y_test[tr][:t, :]]
+        z_pred, x_pred, _ = lds.sample(predict_len, prefix=prefix, with_noise=False)
+        r_pred = lds.emissions.mean(np.matmul(lds.emissions.Cs[None, ...], x_pred[:, None, :, None])[:, :, :, 0] 
+            + lds.emissions.ds).squeeze()
+        lds_y[j] = r_pred
             
-            elbo_test, q_test = rslds.approximate_posterior(y_test[tr][:t, :],                                                       
-                                                num_iters=200,
-                                                continuous_tolerance=1e-12,
-                                                continuous_maxiter=400,
-                                                verbose=0)
-            x_infer = q_test.mean_continuous_states[0]
-            z_infer = rslds.most_likely_states(x_infer, y_test[tr][:t, :])
-            prefix = [z_infer[:t], x_infer[:t], y_test[tr][:t, :]]
-            z_pred, x_pred, _ = rslds.sample(predict_len, prefix=prefix, with_noise=False)
-            r_pred = rslds.emissions.mean(np.matmul(rslds.emissions.Cs[None, ...], x_pred[:, None, :, None])[:, :, :, 0] 
-                + rslds.emissions.ds).squeeze()
-
-            rslds_y[j] = r_pred
+        # rSLDS
+        elbo_test, q_test = rslds.approximate_posterior(y_test[tr][:t, :],                                                       
+                                            num_iters=200,
+                                            continuous_tolerance=1e-12,
+                                            continuous_maxiter=400,
+                                            verbose=0)
+        x_infer = q_test.mean_continuous_states[0]
+        z_infer = rslds.most_likely_states(x_infer, y_test[tr][:t, :])
+        prefix = [z_infer[:t], x_infer[:t], y_test[tr][:t, :]]
+        z_pred, x_pred, _ = rslds.sample(predict_len, prefix=prefix, with_noise=False)
+        r_pred = rslds.emissions.mean(np.matmul(rslds.emissions.Cs[None, ...], x_pred[:, None, :, None])[:, :, :, 0] 
+            + rslds.emissions.ds).squeeze()
+        rslds_y[j] = r_pred
     
     # %%
     for n in range(y_test[tr].shape[1]):
@@ -159,8 +160,9 @@ if __name__ == "__main__":
             plt.plot(range(t, t + predict_len), rslds_y[j, :, n], 'g')
     
     
-    # %%
+    # %% plot the estimated latent vector field
     util.latent_space_transform(lds, C_true, d_true)
     util.latent_space_transform(rslds, C_true, d_true)
     plotting.plot_most_likely_dynamics(lds, xlim=(-5, 10), ylim=(-5, 10))
     plotting.plot_most_likely_dynamics(rslds, xlim=(-5, 10), ylim=(-5, 10))
+# %%

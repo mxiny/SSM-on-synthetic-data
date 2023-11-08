@@ -14,9 +14,9 @@ def compute_approximate_sum(mu):
 
 def make_poisson_rate_prediction(model, y_test, r_test, predict_len):
     if model.K == 1:
-        num_iters = 1
+        num_iters = 10
     else:
-        num_iters = 1
+        num_iters = 200
 
     '''
         I = # Trials
@@ -35,36 +35,37 @@ def make_poisson_rate_prediction(model, y_test, r_test, predict_len):
     '''
     
     elbo = 0
-    index = list(range(10, y_test[0].shape[0]-predict_len, 10))
-    y_trues = np.zeros((len(y_test), len(index), predict_len, y_test[0].shape[1]))
-    y_preds = np.zeros((len(y_test), len(index), predict_len, y_test[0].shape[1]))
+    y_trues = np.zeros((len(y_test), y_test[0].shape[0] - predict_len - 10, predict_len, y_test[0].shape[1]))
+    y_preds = np.zeros((len(y_test), y_test[0].shape[0] - predict_len - 10, predict_len, y_test[0].shape[1]))
     for i in range(len(y_test)): 
-        for j, t in enumerate(index):
-            elbo_test, q_test = model.approximate_posterior(y_test[i][:t, :],                                                       
-                                                num_iters=num_iters,
-                                                continuous_tolerance=1e-12,
-                                                continuous_maxiter=400,
-                                                verbose=0)
-            elbo += elbo_test[-1]
-            x_infer = q_test.mean_continuous_states[0]
-            z_infer = model.most_likely_states(x_infer, y_test[i][:t, :])
+        elbo_test, q_test = model.approximate_posterior(y_test[i],                                                       
+                                                        num_iters=num_iters,
+                                                        continuous_tolerance=1e-16,
+                                                        continuous_maxiter=1000,
+                                                        verbose=0)
+        elbo += elbo_test[-1]
+        
+        x_infer = q_test.mean_continuous_states[0]
+        z_infer = model.most_likely_states(x_infer, y_test[i])
+        
+        for t in range(10, y_test[i].shape[0]-predict_len):
             prefix = [z_infer[:t], x_infer[:t], y_test[i][:t, :]]
             z_pred, x_pred, _ = model.sample(predict_len, prefix=prefix, with_noise=False)
             r_pred = model.emissions.mean(np.matmul(model.emissions.Cs[None, ...], x_pred[:, None, :, None])[:, :, :, 0] 
                 + model.emissions.ds).squeeze()
 
-            y_preds[i, j] = r_pred
-            y_trues[i, j] = y_test[i][t:t+predict_len, :]
+            y_preds[i, t-10] = r_pred
+            y_trues[i, t-10] = y_test[i][t:t+predict_len, :]
             
-    elbo /= len(y_test)     
+    elbo /= len(y_test)      
     mae = np.mean(np.mean(np.linalg.norm(y_preds - y_trues, ord=2, axis=-1), axis=0), axis=0)
 
     y_means = np.mean(np.mean(np.stack(y_test, axis=0), axis=0), axis=0)
     _numerator = 0
     for i in range(y_trues.shape[0]):
-        for j, t in enumerate(index):
+        for t in range(y_trues.shape[1]):
             for n in range(y_trues.shape[-1]):
-                _numerator += compute_approximate_sum((y_preds[i, j, 0, n]))
+                _numerator += compute_approximate_sum((y_preds[i, t, 0, n]))
     
     numerator = np.sum(np.sum(np.sum(y_trues * np.log(y_trues / (y_preds + 1e-8) + 1e-8) - (y_trues - y_preds), axis=-1), axis=0), axis=0)
     denominator = np.sum(np.sum(np.sum(y_trues * np.log(y_trues / (y_means + 1e-8)  + 1e-8), axis=-1), axis=0), axis=0)
@@ -87,7 +88,7 @@ def evaluator(path, y_test, r_test, predict_len, id):
 
 
 def evaluate_models(path, y_test, r_test, model_num, predict_len, pool_size):
-    result_path = path + "outcomes_sampled.npy"
+    result_path = path + "outcomes.npy"
     if not os.path.exists(result_path):
         return_packs = []
         with get_context("spawn").Pool(processes=pool_size) as pool:

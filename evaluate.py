@@ -35,29 +35,29 @@ def make_poisson_rate_prediction(model, y_test, r_test, predict_len):
     '''
     
     elbo = 0
-    y_trues = np.zeros((len(y_test), y_test[0].shape[0] - predict_len - 10, predict_len, y_test[0].shape[1]))
-    y_preds = np.zeros((len(y_test), y_test[0].shape[0] - predict_len - 10, predict_len, y_test[0].shape[1]))
-    for i in range(len(y_test)): 
-        elbo_test, q_test = model.approximate_posterior(y_test[i],                                                       
+    index = list(range(10, y_test[0].shape[0]-predict_len, 30))
+    y_trues = np.zeros((len(y_test), len(index), predict_len, y_test[0].shape[1]))
+    y_preds = np.zeros((len(y_test), len(index), predict_len, y_test[0].shape[1]))
+    for i in range(len(y_test)):         
+        for j, t in enumerate(index):
+            elbo_test, q_test = model.approximate_posterior(y_test[i][:t],                                                       
                                                         num_iters=num_iters,
                                                         continuous_tolerance=1e-16,
                                                         continuous_maxiter=1000,
                                                         verbose=0)
-        elbo += elbo_test[-1]
+            elbo += elbo_test[-1]
         
-        x_infer = q_test.mean_continuous_states[0]
-        z_infer = model.most_likely_states(x_infer, y_test[i])
-        
-        for t in range(10, y_test[i].shape[0]-predict_len):
-            prefix = [z_infer[:t], x_infer[:t], y_test[i][:t, :]]
+            x_infer = q_test.mean_continuous_states[0]
+            z_infer = model.most_likely_states(x_infer, y_test[i][:t])
+            prefix = [z_infer, x_infer, y_test[i][:t]]
             z_pred, x_pred, _ = model.sample(predict_len, prefix=prefix, with_noise=False)
             r_pred = model.emissions.mean(np.matmul(model.emissions.Cs[None, ...], x_pred[:, None, :, None])[:, :, :, 0] 
                 + model.emissions.ds).squeeze()
 
-            y_preds[i, t-10] = r_pred
-            y_trues[i, t-10] = y_test[i][t:t+predict_len, :]
+            y_preds[i, j] = r_pred
+            y_trues[i, j] = y_test[i][t:t+predict_len, :]
             
-    elbo /= len(y_test)      
+    elbo /= len(y_test)
     mae = np.mean(np.mean(np.linalg.norm(y_preds - y_trues, ord=2, axis=-1), axis=0), axis=0)
 
     y_means = np.mean(np.mean(np.stack(y_test, axis=0), axis=0), axis=0)
@@ -120,7 +120,7 @@ def evaluate_models(path, y_test, r_test, model_num, predict_len, pool_size):
 
 
 def evaluate_best_model(path, id, y_test, r_test, predict_len):
-    result_path = path + "best_outcome.npy"
+    result_path = path + "best_outcome_30_sampled.npy"
     if not os.path.exists(result_path):
 
         return_pack = evaluator(path, y_test, r_test, predict_len, id)

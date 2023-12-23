@@ -117,12 +117,7 @@ def load_model(path):
             model = dill.load(f)
             elbos = dill.load(f)
             # q = dill.load(f)
-    elif os.path.exists(path[:-5] + ".npz"):
-        file = np.load(path[:-5] + ".npz", allow_pickle=True)
-        model = file["model"].tolist()
-        elbos = file["elbos"]
-        
+        return model, elbos, q
     else:
         raise FileNotFoundError
     
-    return model, elbos, q

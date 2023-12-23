@@ -21,7 +21,6 @@ def trainer(y_train, latent_dim, K, path, id, max_iters):
         model, elbos, q = util.load_model(model_path)
 
     util.save_model(model_path, model, elbos, q)
-    return [elbos[-1], id]
 
 
 def train_models(path, y_train, latent_dim, K, model_num, max_iters, pool_size):
@@ -35,12 +34,6 @@ def train_models(path, y_train, latent_dim, K, model_num, max_iters, pool_size):
             return_packs.append(pool.apply_async(trainer, args=(y_train, latent_dim, K, path, str(i), max_iters)))
         pool.close()
         pool.join()
-
-    elbo_queue = []
-    for res in return_packs:
-        elbo_queue.append(res.get())
         
-    sorted_queue = sorted(elbo_queue, key=lambda x:x[0], reverse=True)
     print("Training completed!")
-    return sorted_queue
 

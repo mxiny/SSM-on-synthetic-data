@@ -14,27 +14,27 @@ pool_size = 10
 def split_data(data):
     n = data.shape[0]
     train = data[:int(n * 0.7)]
-    dev = data[int(n * 0.7):int(n * 0.8)]
+    val = data[int(n * 0.7):int(n * 0.8)]
     test = data[int(n * 0.8):]
-    return train, dev, test    
+    return train, val, test
 
 
  # %%
 if __name__ == "__main__":
-    path_prefix = "/home/jamie/Code/rSLDS/synth/"   # change to your own project path
-    data = sio.loadmat(path_prefix + "data/synth_poisson/ObsDim10_Q0_01_Rate2.mat")
+    path_prefix = "/home/jamie/Code/Lab/rSLDS/synth/"   # use your own project path
+    data = sio.loadmat(path_prefix + "data/synth_poisson/ObsDim50_Q0_01_Rate2.mat")
     Xs = data["Xs"]
     Zs = data["Zs"]
     Ys = data["Ys"].astype(int)
     C_true = data["C"]
     d_true = data["d"].squeeze()
 
-    x_train, x_dev, x_test = split_data(Xs)
-    z_train, z_dev, z_test = split_data(Zs)
-    y_train, y_dev, y_test = split_data(Ys)
+    x_train, x_val, x_test = split_data(Xs)
+    z_train, z_val, z_test = split_data(Zs)
+    y_train, y_val, y_test = split_data(Ys)
 
     r_train = np.log(1 + np.exp(z_train))
-    r_dev = np.log(1 + np.exp(z_dev))
+    r_val = np.log(1 + np.exp(z_val))
     r_test = np.log(1 + np.exp(z_test))
     
     
@@ -48,37 +48,56 @@ if __name__ == "__main__":
     
     # %%
     y_train = [y.astype(int) for y in y_train]
-    y_dev = [y.astype(int) for y in y_dev]
+    y_val = [y.astype(int) for y in y_val]
     y_test = [y.astype(int) for y in y_test]
     
-    lds_path = path_prefix + "models/ObsDim10_Q0_01_Rate2_K1/"
-    rslds_path = path_prefix + "models/ObsDim10_Q0_01_Rate2_K3/"
+    lds_path = path_prefix + "models/ObsDim50_Q0_01_Rate2_K1/"
+    rslds_path = path_prefix + "models/ObsDim50_Q0_01_Rate2_K3/"
     
-    elbo_ids_K1 = train.train_models(lds_path, y_train, latent_dim, 1, model_num, 50, pool_size)
-    elbo_ids_K3 = train.train_models(rslds_path, y_train, latent_dim, 3, model_num, 150, pool_size)
+    # train.train_models(lds_path, y_train, latent_dim, 1, model_num, 50, pool_size)
+    # train.train_models(rslds_path, y_train, latent_dim, 3, model_num, 150, pool_size)
+
+    lds_id = evaluate.select_best_model(lds_path, y_val, model_num, pool_size)
+    rslds_id = evaluate.select_best_model(rslds_path, y_val, model_num, pool_size)
     
     # %%
-    ids_K1, train_elbos_K1, test_elbos_K1, R2s_K1, eR2s_K1, maes_K1 = evaluate.evaluate_best_model(lds_path, elbo_ids_K1[0][1], y_test, r_test, predict_len)
+    _, train_elbos_K1, test_elbos_K1, eR2s_K1, R2s_K1, maes_K1 = evaluate.get_across_trial_evaluation(lds_path, lds_id, y_test)
     print("1-mode LDS model on sythetic Poisson dataset:")
     print("Training ELBO = %.3f, Testing ELBO = %.3f, R^2 = %.4f, expected R^2 = %.4f, MAE = %.3f" %
           (train_elbos_K1, test_elbos_K1, R2s_K1[0], eR2s_K1[0], maes_K1[0]))
     
-    ids_K3, train_elbos_K3, test_elbos_K3, R2s_K3, eR2s_K3, maes_K3 = evaluate.evaluate_best_model(rslds_path, elbo_ids_K3[0][1], y_test, r_test, predict_len)
+    _, train_elbos_K3, test_elbos_K3, eR2s_K3, R2s_K3, maes_K3 = evaluate.get_across_trial_evaluation(rslds_path, rslds_id, y_test)
     print("3-mode rSLDS model on sythetic Poisson dataset:")
     print("Training ELBO = %.3f, Testing ELBO = %.3f, R^2 = %.4f, expected R^2 = %.4f, MAE = %.3f" %
           (train_elbos_K3, test_elbos_K3, R2s_K3[0], eR2s_K3[0], maes_K3[0]))
+
     
+    # %% compute the p value between outcomes from lds and rslds model
+    
+    test_elbos_K1, best_R2s_K1, best_maes_K1 = evaluate.get_individual_trial_evaluation(lds_path, lds_id, y_test)
+    # print(np.mean(np.stack(best_R2s_K1, axis=0), axis=0)[0])
+    test_elbos_K3, best_R2s_K3, best_maes_K3 = evaluate.get_individual_trial_evaluation(rslds_path, rslds_id, y_test)
+    # print(np.mean(np.stack(best_R2s_K3, axis=0), axis=0)[0])
+    from scipy.stats import wilcoxon
+    best_R2s_K1 = [x[0] for x in best_R2s_K1]
+    best_R2s_K3 = [x[0] for x in best_R2s_K3]
+    best_maes_K1 = [x[0] for x in best_maes_K1]
+    best_maes_K3 = [x[0] for x in best_maes_K3]
+    stat, p_R2 = wilcoxon(best_R2s_K1, best_R2s_K3)
+    stat, p_mae = wilcoxon(best_maes_K1, best_maes_K3)
+    
+    print (p_R2, p_mae)
+
     # %% visualize the comparison of estimated latent dynamic between lds and rslds
-    with open(lds_path + str(elbo_ids_K1[0][1]) + ".dill", 'rb') as f:
+    with open(lds_path + str(lds_id) + ".dill", 'rb') as f:
         lds = dill.load(f)
 
-    with open(rslds_path + str(elbo_ids_K3[0][1]) + ".dill", 'rb') as f:
+    with open(rslds_path + str(rslds_id) + ".dill", 'rb') as f:
         rslds = dill.load(f)
-    
     lds_err = 0
     rslds_err = 0
-    # frist 5 test trials
-    for i in range(5):
+    # frist 1 test trials
+    for i in range(1):
         elbo_test, q_test = lds.approximate_posterior(y_test[i],                      
                                                     num_iters=10,
                                                     continuous_tolerance=1e-12,
@@ -165,4 +184,12 @@ if __name__ == "__main__":
     util.latent_space_transform(rslds, C_true, d_true)
     plotting.plot_most_likely_dynamics(lds, xlim=(-5, 10), ylim=(-5, 10))
     plotting.plot_most_likely_dynamics(rslds, xlim=(-5, 10), ylim=(-5, 10))
-# %%
+
+    # %% visualize latent dynamics of all trained models
+    for i in range(12):
+        with open(rslds_path + str(i) + ".dill", 'rb') as f:
+            rslds = dill.load(f)
+        util.latent_space_transform(rslds, C_true, d_true)
+        plotting.plot_most_likely_dynamics(rslds, xlim=(-5, 10), ylim=(-5, 10))
+        
+    # %%

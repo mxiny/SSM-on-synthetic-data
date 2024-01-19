@@ -6,14 +6,19 @@ import dill
 import util
 
 def compute_approximate_sum(mu):
-    if mu < 2:
-        appr_term = (2.3465 ** (mu - 0.492293)) * (mu ** 2)
-    else: 
-        appr_term = (np.exp(mu) + 0.532784) * np.log(mu + 0.525349) * mu
+    # if mu < 2:
+    #     appr_term = (2.3465 ** (mu - 0.492293)) * (mu ** 2)
+    # else: 
+    #     appr_term = (np.exp(mu) + 0.532784) * np.log(mu + 0.525349) * mu
+    
+    appr_term = 0
+    factorial = [np.math.factorial(i) for i in range(0, 51)]
+    for i in range(1, 51):
+        appr_term += i * np.log(i) * np.power(mu, i) / factorial[i]
     return np.exp(-mu) * appr_term - mu * np.log(mu + 1e-8)
 
 
-def make_poisson_rate_prediction(path, model_id, y_test, predict_len=10, interval=30, cache=1):
+def make_prediction(path, model_id, y_test, predict_len=10, interval=30, cache=1):
     '''
         I = # Trials
         T = # Timepoints
@@ -72,8 +77,14 @@ def make_poisson_rate_prediction(path, model_id, y_test, predict_len=10, interva
                 z_infer = model.most_likely_states(x_infer, y_test[i][:t])
                 prefix = [z_infer, x_infer, y_test[i][:t]]
                 z_pred, x_pred, _ = model.sample(predict_len, prefix=prefix, with_noise=False)
-                r_pred = model.emissions.mean(np.matmul(model.emissions.Cs[None, ...], x_pred[:, None, :, None])[:, :, :, 0] 
-                    + model.emissions.ds).squeeze()
+
+                if hasattr(model.emissions, "mean"):
+                    # Poisson 
+                    r_pred = model.emissions.mean(np.matmul(model.emissions.Cs[None, ...], x_pred[:, None, :, None])[:, :, :, 0] 
+                        + model.emissions.ds).squeeze()
+                else:
+                    # Gaussian
+                    r_pred = (np.matmul(model.emissions.Cs[None, ...], x_pred[:, None, :, None])[:, :, :, 0] + model.emissions.ds)[:, 0, :]
 
                 y_preds.append(r_pred)
                 y_trues.append(y_test[i][t:t+predict_len, :])
@@ -81,18 +92,28 @@ def make_poisson_rate_prediction(path, model_id, y_test, predict_len=10, interva
             save_y_pred.append(y_preds)
             save_y_true.append(y_trues)
 
-    if cache == 1:
-        with open(path + 'prediction_cache.dill', 'wb') as f:
-            dill.dump(save_y_pred, f)
-            dill.dump(save_y_true, f)
-            dill.dump(train_elbos, f)
-            dill.dump(test_elbos, f)            
+        if cache == 1:
+            with open(path + 'prediction_cache.dill', 'wb') as f:
+                dill.dump(save_y_pred, f)
+                dill.dump(save_y_true, f)
+                dill.dump(train_elbos, f)
+                dill.dump(test_elbos, f)
     
+    # if y_test is firing rate
+    if hasattr(model.emissions, "mean") and not isinstance(y_test[0][0, 0], np.int64):
+        save_y_true = []
+        for i in range(len(y_test)): 
+            y_trues = []
+            index = list(range(10, y_test[i].shape[0]-predict_len, interval))     
+            for t in index:
+                y_trues.append(y_test[i][t:t+predict_len, :])
+            save_y_true.append(y_trues)
+
     return save_y_pred, save_y_true, train_elbos, test_elbos
 
 
 def get_across_trial_evaluation(path, model_id, y_test, cache=True):
-    save_y_pred, save_y_true, train_elbos, test_elbos = make_poisson_rate_prediction(path, model_id, y_test, cache=cache)
+    save_y_pred, save_y_true, train_elbos, test_elbos = make_prediction(path, model_id, y_test, cache=cache)
 
     y_trues = []
     y_preds = []
@@ -105,23 +126,32 @@ def get_across_trial_evaluation(path, model_id, y_test, cache=True):
     y_trues = np.stack(y_trues, axis=0)
     y_preds = np.stack(y_preds, axis=0)
     mae = np.mean(np.linalg.norm(y_preds - y_trues, ord=2, axis=-1), axis=0)
-
-    y_means = np.mean(y_trues[:, 0, :], axis=0)
-    _numerator = 0
-    for i in range(y_trues.shape[0]):
-        for n in range(y_trues.shape[-1]):
-            _numerator += compute_approximate_sum((y_preds[i, 0, n]))
-    
-    numerator = np.sum(np.sum(y_trues * np.log(y_trues / (y_preds + 1e-8) + 1e-8) - (y_trues - y_preds), axis=-1), axis=0)
-    denominator = np.sum(np.sum(y_trues * np.log(y_trues / (y_means + 1e-8)  + 1e-8), axis=-1), axis=0)
-    eR2 = 1 - _numerator / (denominator + 1e-8) 
-    R2 = 1 - numerator / (denominator + 1e-8) 
     test_elbo = np.mean(test_elbos)
+
+    if isinstance(y_test[0][0, 0], np.int64):
+        y_means = np.mean(y_trues[:, :, :], axis=0)
+        _numerator = 0
+        for i in range(y_trues.shape[0]):
+            for n in range(y_trues.shape[-1]):
+                _numerator += compute_approximate_sum((y_preds[i, 0, n]))
+        
+        numerator = np.sum(np.sum(y_trues * np.log(y_trues / (y_preds + 1e-8) + 1e-8) - (y_trues - y_preds), axis=-1), axis=0)
+        denominator = np.sum(np.sum(y_trues * np.log(y_trues / (y_means + 1e-8)  + 1e-8), axis=-1), axis=0)
+        eR2 = 1 - _numerator / (denominator + 1e-8) 
+        R2 = 1 - numerator / (denominator + 1e-8) 
+    else:
+        numerator = np.linalg.norm(y_preds - y_trues, ord=2, axis=-1)
+        numerator = np.sum(numerator * numerator, axis=0)
+        denominator = np.linalg.norm(y_trues - np.average(y_trues, axis=0), ord=2, axis=-1)
+        denominator = np.sum(denominator * denominator, axis=0)
+        R2 = 1 - numerator / (denominator + 1e-8)
+        eR2 = [0]
+
     return model_id, train_elbos[-1], test_elbo, eR2, R2, mae
 
 
 def get_individual_trial_evaluation(path, model_id, y_test):
-    save_y_pred, save_y_true, train_elbos, test_elbos = make_poisson_rate_prediction(path, model_id, y_test)
+    save_y_pred, save_y_true, train_elbos, test_elbos = make_prediction(path, model_id, y_test)
 
     R2s = []
     maes = []
@@ -129,9 +159,16 @@ def get_individual_trial_evaluation(path, model_id, y_test):
         y_preds = np.stack(save_y_pred[i], axis=0)
         y_trues = np.stack(save_y_true[i], axis=0)
         y_means = np.mean(y_trues[:, 0, :], axis=0)
-        numerator = np.sum(np.sum(y_trues * np.log(y_trues / (y_preds + 1e-8) + 1e-8) - (y_trues - y_preds), axis=-1), axis=0)
-        denominator = np.sum(np.sum(y_trues * np.log(y_trues / (y_means + 1e-8)  + 1e-8), axis=-1), axis=0)
-        R2 = 1 - numerator / (denominator + 1e-8) 
+        if isinstance(y_test[0][0, 0], np.int64):
+            numerator = np.sum(np.sum(y_trues * np.log(y_trues / (y_preds + 1e-8) + 1e-8) - (y_trues - y_preds), axis=-1), axis=0)
+            denominator = np.sum(np.sum(y_trues * np.log(y_trues / (y_means + 1e-8)  + 1e-8), axis=-1), axis=0)
+            R2 = 1 - numerator / (denominator + 1e-8) 
+        else:
+            numerator = np.linalg.norm(y_preds - y_trues, ord=2, axis=-1)
+            numerator = np.sum(numerator * numerator, axis=0)
+            denominator = np.linalg.norm(y_trues - np.average(y_trues, axis=0), ord=2, axis=-1)
+            denominator = np.sum(denominator * denominator, axis=0)
+            R2 = 1 - numerator / (denominator + 1e-8)
         
         mae = np.mean(np.linalg.norm(y_preds - y_trues, ord=2, axis=-1), axis=0)
             
@@ -152,7 +189,7 @@ def select_best_model(path, y_val, model_num, pool_size):
             pool.join()
 
         # # For testing
-        # return_packs = get_across_trial_evaluation(path, y_val, 0, 0)
+        # return_packs = get_across_trial_evaluation(path, 0, y_val, 0)
 
         results = []
         for res in return_packs:

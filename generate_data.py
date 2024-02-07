@@ -12,23 +12,23 @@ trial_length = 250
 latent_dim = 2
 
 # Fixed mode parameters
-att_top = np.array([1, 4])
-att_bottom = np.array([7, 2])
+att_top = np.array([1, 6])
+att_bottom = np.array([6, 1])
 As = np.stack([np.eye(latent_dim), 0.5*np.eye(latent_dim), 0.5*np.eye(latent_dim)])
 bs = np.stack([np.array([0.05, 0.05]), 0.5*att_top, 0.5*att_bottom])
 
 # Noise
-obs_dims = [100, 50, 10]
+obs_dims = [200, 100, 50, 25, 10]
 Qs = [0.01]
 Ss = [0, 0.01, 0.02, 0.05, 0.1, 0.2]
 
 # Adjust the average firing rate of poisson data
-target_rates = [2, 1, 0.5, 0.3, 0.1]
+target_rates = [0.25]
 
 data_path = "data/"
 
 def find_rate_bias(target_rate, Xs, C, d):
-    biases = np.arange(-10, 4, 0.05)
+    biases = np.arange(-8, 2, 0.05)
     errs = np.zeros(biases.shape[0])
     
     for i, bias in enumerate(biases):
@@ -167,10 +167,10 @@ def generate_observations(Xs, obs_type, obs_dim, Q, S, rate, save):
         sio.savemat(file_path, data)
         print("Saved observations: " + file_path)
     
-    import plotting
-    plotting.plot_data(Xs, "Xs", "x1", "x2")
-    plotting.plot_data(np.log(1 + np.exp(Zs)), "Rs", "r1", "r2")
-    plotting.plot_data(Ys, "Ys", "y1", "y2")
+    # import plotting
+    # plotting.plot_data(Xs, "Xs", "x1", "x2")
+    # plotting.plot_data(np.log(1 + np.exp(Zs)), "Rs", "r1", "r2")
+    # plotting.plot_data(Ys, "Ys", "y1", "y2")
 
     return Zs, Ys
 

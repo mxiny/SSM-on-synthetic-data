@@ -9,13 +9,13 @@ import util, train, evaluate, plotting
 ## training parameters
 predict_len = 10
 latent_dim = 2
-model_num = 10
+model_num = 40
 pool_size = 10
 
 DIM = '10'
 S = '0_01'
 
-# _, DIM, RATE = sys.argv
+_, DIM, S = sys.argv
 
 def split_data(data):
     n = data.shape[0]
@@ -53,8 +53,8 @@ if __name__ == "__main__":
     lds_path = path_prefix + "models/gaussian/ObsDim" + DIM + "_Q0_01_S" + S + "_K1/"
     rslds_path = path_prefix + "models/gaussian/ObsDim" + DIM + "_Q0_01_S" + S + "_K3/"
     
-    train.train_models(lds_path, y_train, latent_dim, 1, model_num, 50, pool_size)
-    train.train_models(rslds_path, y_train, latent_dim, 3, model_num, 150, pool_size)
+#     train.train_models(lds_path, y_train, latent_dim, 1, model_num, 50, pool_size)
+#     train.train_models(rslds_path, y_train, latent_dim, 3, model_num, 150, pool_size)
 
     lds_id = evaluate.select_best_model(lds_path, y_val, model_num, pool_size)
     rslds_id = evaluate.select_best_model(rslds_path, y_val, model_num, pool_size)
@@ -71,24 +71,24 @@ if __name__ == "__main__":
           (train_elbos_K3, test_elbos_K3, R2s_K3[0], eR2s_K3[0], maes_K3[0]))
 
     
-    # %%
-    plt.plot(range(1, 11), R2s_K1, label='LDS')
-    plt.plot(range(1, 11), R2s_K3, label='rSLDS')
-    plt.ylabel('R^2')
-    plt.xlabel('prediction steps ahead')
-    plt.xticks(range(1, 11))
-    plt.legend()
-    plt.grid(True)
-    plt.show()
+#     # %%
+#     plt.plot(range(1, 11), R2s_K1, label='LDS')
+#     plt.plot(range(1, 11), R2s_K3, label='rSLDS')
+#     plt.ylabel('R^2')
+#     plt.xlabel('prediction steps ahead')
+#     plt.xticks(range(1, 11))
+#     plt.legend()
+#     plt.grid(True)
+#     plt.show()
     
-    plt.plot(range(1, 11), maes_K1, label='LDS')
-    plt.plot(range(1, 11), maes_K3, label='rSLDS')
-    plt.ylabel('MAE')
-    plt.xlabel('prediction steps ahead')
-    plt.xticks(range(1, 11))
-    plt.legend()
-    plt.grid(True)
-    plt.show()
+#     plt.plot(range(1, 11), maes_K1, label='LDS')
+#     plt.plot(range(1, 11), maes_K3, label='rSLDS')
+#     plt.ylabel('MAE')
+#     plt.xlabel('prediction steps ahead')
+#     plt.xticks(range(1, 11))
+#     plt.legend()
+#     plt.grid(True)
+#     plt.show()
     
     # %% compute the p value between outcomes from lds and rslds model
     
@@ -97,8 +97,6 @@ if __name__ == "__main__":
     test_elbos_K3, best_R2s_K3, best_maes_K3 = evaluate.get_individual_trial_evaluation(rslds_path, rslds_id, y_test)
     # print(np.mean(np.stack(best_R2s_K3, axis=0), axis=0)[0])
     from scipy.stats import wilcoxon
-    test_elbos_K1 = [x[0] for x in test_elbos_K1]
-    test_elbos_K3 = [x[0] for x in test_elbos_K3]
     best_R2s_K1 = [x[0] for x in best_R2s_K1]
     best_R2s_K3 = [x[0] for x in best_R2s_K3]
     best_maes_K1 = [x[0] for x in best_maes_K1]

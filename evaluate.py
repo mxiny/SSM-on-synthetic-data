@@ -12,9 +12,10 @@ def compute_approximate_sum(mu):
     #     appr_term = (np.exp(mu) + 0.532784) * np.log(mu + 0.525349) * mu
     
     appr_term = 0
-    factorial = [np.math.factorial(i) for i in range(0, 51)]
+    factorial = 1
     for i in range(1, 51):
-        appr_term += i * np.log(i) * np.power(mu, i) / factorial[i]
+        factorial *= i
+        appr_term += i * np.log(i) * np.power(mu, i) / factorial
     return np.exp(-mu) * appr_term - mu * np.log(mu + 1e-8)
 
 
@@ -34,6 +35,11 @@ def make_prediction(path, model_id, y_test, predict_len=10, interval=30, cache=1
         >> y_means: (Dim = N):
             The average firing rates of N neurons accoss T timepoints.
     '''
+    if os.path.exists(path + str(model_id) + ".dill"):
+        model, train_elbos, q = util.load_model(path + str(model_id) + ".dill")
+    else:
+        return FileNotFoundError
+    
 
     if cache == 1 and os.path.exists(path + 'prediction_cache.dill'):
         with open(path + 'prediction_cache.dill', 'rb') as f:
@@ -42,10 +48,6 @@ def make_prediction(path, model_id, y_test, predict_len=10, interval=30, cache=1
             train_elbos = dill.load(f)
             test_elbos = dill.load(f)
     else:
-        if os.path.exists(path + str(model_id) + ".dill"):
-            model, train_elbos, q = util.load_model(path + str(model_id) + ".dill")
-        else:
-            return FileNotFoundError
 
         if model.K == 1:
             num_iters = 10
@@ -100,7 +102,7 @@ def make_prediction(path, model_id, y_test, predict_len=10, interval=30, cache=1
                 dill.dump(test_elbos, f)
     
     # if y_test is firing rate
-    if hasattr(model.emissions, "mean") and not isinstance(y_test[0][0, 0], np.int64):
+    if not isinstance(y_test[0][0, 0], np.int64) and hasattr(model.emissions, "mean"):
         save_y_true = []
         for i in range(len(y_test)): 
             y_trues = []
@@ -211,3 +213,53 @@ def select_best_model(path, y_val, model_num, pool_size):
     maes = np.stack(sorted_results_array[:, 5])
     
     return best_model_id
+
+
+def evaluate_inferred_dynamic(model, C_true, d_true):
+    # 1. compare attractors
+    # True attractor (1, 6) and (6, 1)
+    diff = 0
+    atts_true = np.array([[6, 1], [1, 6]])
+    for k in range(model.K):
+        att = util.find_attractor(model)[k]
+        att_orginal = util.compute_original_x(model, att, C_true, d_true)
+        if np.min(np.linalg.norm(att_orginal - atts_true, ord=2, axis=1)) > 1:
+            att_norm = np.linalg.norm(att_orginal, ord=2)
+            diff += (np.abs(att_orginal[0] - att_orginal[1]) / np.sqrt(2) / att_norm) \
+                + 2 * util.tanh(50 / (att_norm ** 2))
+        else:
+            diff += np.min(np.linalg.norm(att_orginal - atts_true, ord=2, axis=1))
+    diff /= model.K
+    # 2. compare eigenvalues of A
+    offset = 0
+    A_true = [np.eye(model.D), 0.5 * np.eye(model.D), 0.5 * np.eye(model.D)]
+    b_true = np.array([[0.05, 0.05], [-0.5, -3], [-3, -0.5]])
+    eigval_true = np.stack([np.linalg.eigvals(A_true[k]) for k in range(model.K)])
+    for k in range(model.K):
+        eigval_est = np.linalg.eigvals(model.dynamics.As[k])
+        offset += np.min(np.linalg.norm(eigval_est - eigval_true, ord=2, axis=1))
+    
+    offset /= model.K
+    # 3. compare switching boudary
+    error = 0 
+    # Project to the original latent space
+    C_est_inv = np.linalg.pinv(model.emissions.Cs[0]).squeeze()
+    M = C_est_inv.dot(C_true).squeeze()
+    n = C_est_inv.dot((d_true - model.emissions.ds[0])).squeeze()
+    
+    # Get the probability of each state at each xy location
+    R = model.transitions.Rs.dot(M)
+    r = model.transitions.Rs.dot(n) + model.transitions.r
+    
+    bias_true = np.array([-1, 0, 1])
+    for i in range(model.K):
+        for j in range(i + 1, model.K):
+            slope = (R[j, 0] - R[i, 0]) / (R[i, 1] - R[j, 1])
+            bias = (r[i] - r[j]) / (R[i, 1] - R[j, 1])
+            slope_err = np.min([np.abs(slope - 1), 5])
+            bias_err = np.min([np.min(np.abs(bias - bias_true)), 5])
+            error += slope_err + bias_err
+    if model.K > 1:
+        error /= (model.K * model.K - model.K)
+    score = diff + offset + error
+    return score

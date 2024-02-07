@@ -12,10 +12,10 @@ latent_dim = 2
 model_num = 20
 pool_size = 5
 
-DIM = '50'
+DIM = '100'
 RATE = '2'
 
-# _, DIM, RATE = sys.argv
+_, DIM, RATE = sys.argv
 
 if int(DIM) >= 100:
     model_num = 12
@@ -61,8 +61,8 @@ if __name__ == "__main__":
     y_val = list(y_val)
     y_test = list(y_test)
     
-    lds_path = path_prefix + "models/ObsDim" + DIM + "_Q0_01_Rate" + RATE + "_K1/"
-    rslds_path = path_prefix + "models/ObsDim" + DIM + "_Q0_01_Rate" + RATE + "_K3/"
+    lds_path = path_prefix + "models/poisson/ObsDim" + DIM + "_Q0_01_Rate" + RATE + "_K1/"
+    rslds_path = path_prefix + "models/poisson/ObsDim" + DIM + "_Q0_01_Rate" + RATE + "_K3/"
     
     # train.train_models(lds_path, y_train, latent_dim, 1, model_num, 50, pool_size)
     # train.train_models(rslds_path, y_train, latent_dim, 3, model_num, 150, pool_size)
@@ -102,14 +102,21 @@ if __name__ == "__main__":
     plt.show()
     
     # %% compute the p value between outcomes from lds and rslds model
-    
     test_elbos_K1, best_R2s_K1, best_maes_K1 = evaluate.get_individual_trial_evaluation(lds_path, lds_id, y_test)
     # print(np.mean(np.stack(best_R2s_K1, axis=0), axis=0)[0])
     test_elbos_K3, best_R2s_K3, best_maes_K3 = evaluate.get_individual_trial_evaluation(rslds_path, rslds_id, y_test)
     # print(np.mean(np.stack(best_R2s_K3, axis=0), axis=0)[0])
+    
+    # %%
+    plt.hist([x[-1] for x in best_R2s_K1], label='LDS', alpha=0.5)
+    plt.hist([x[-1] for x in best_R2s_K3], label='rSLDS', alpha=0.5)
+    plt.legend()
+    plt.xlabel('MAE')
+    plt.ylabel('trials')
+    plt.show()
+
+    # %%
     from scipy.stats import wilcoxon
-    test_elbos_K1 = [x[0] for x in test_elbos_K1]
-    test_elbos_K3 = [x[0] for x in test_elbos_K3]
     best_R2s_K1 = [x[0] for x in best_R2s_K1]
     best_R2s_K3 = [x[0] for x in best_R2s_K3]
     best_maes_K1 = [x[0] for x in best_maes_K1]
@@ -121,11 +128,22 @@ if __name__ == "__main__":
     print (p_elbo, p_R2, p_mae)
 
     # %% visualize the comparison of estimated latent dynamic between lds and rslds
-    with open(lds_path + str(lds_id) + ".dill", 'rb') as f:
-        lds = dill.load(f)
+    # with open(lds_path + str(lds_id) + ".dill", 'rb') as f:
+    #     lds = dill.load(f)
 
-    with open(rslds_path + str(rslds_id) + ".dill", 'rb') as f:
-        rslds = dill.load(f)
+    # with open(rslds_path + str(rslds_id) + ".dill", 'rb') as f:
+    #     rslds = dill.load(f)
+        
+    # print(evaluate.evaluate_inferred_dynamic(lds, C_true, d_true))
+    # print(evaluate.evaluate_inferred_dynamic(rslds, C_true, d_true))
+    
+    # # %% plot the estimated latent vector field
+    # util.latent_space_transform(lds, C_true, d_true)
+    # util.latent_space_transform(rslds, C_true, d_true)
+    # plotting.plot_most_likely_dynamics(lds, xlim=(-5, 10), ylim=(-5, 10))
+    # plotting.plot_most_likely_dynamics(rslds, xlim=(-5, 10), ylim=(-5, 10))
+    
+    # %%
     # lds_err = 0
     # rslds_err = 0
     # # frist 1 test trials
@@ -210,12 +228,6 @@ if __name__ == "__main__":
     #         plt.plot(range(t, t + predict_len), lds_y[j, :, n], 'r')
     #         plt.plot(range(t, t + predict_len), rslds_y[j, :, n], 'g')
     
-    
-    # %% plot the estimated latent vector field
-    util.latent_space_transform(lds, C_true, d_true)
-    util.latent_space_transform(rslds, C_true, d_true)
-    plotting.plot_most_likely_dynamics(lds, xlim=(-5, 10), ylim=(-5, 10))
-    plotting.plot_most_likely_dynamics(rslds, xlim=(-5, 10), ylim=(-5, 10))
 
     # # %% visualize latent dynamics of all trained models
     # for i in range(12):

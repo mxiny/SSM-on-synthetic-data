@@ -19,6 +19,59 @@ def compute_approximate_sum(mu):
     return np.exp(-mu) * appr_term - mu * np.log(mu + 1e-8)
 
 
+def make_last_value_prediction(y_test, predict_len=10, interval=30):
+    save_y_pred = []
+    save_y_true = []
+    for i in range(len(y_test)): 
+            y_preds = []
+            y_trues = []
+            index = list(range(10, y_test[i].shape[0]-predict_len, interval))     
+            for t in index:
+                r_pred = np.repeat(y_test[i][t-1][None, :], predict_len, axis=0)
+                y_preds.append(r_pred)
+                y_trues.append(y_test[i][t:t+predict_len, :])
+                
+            save_y_pred.append(y_preds)
+            save_y_true.append(y_trues)
+    
+    return save_y_pred, save_y_true
+
+
+def make_latent_variable_prediction(path, model_id, x_test, save_y_pred, C_true, d_true, predict_len=10, interval=30):
+    save_x_pred = []
+    save_x_true = []
+    
+    if os.path.exists(path + str(model_id) + ".dill"):
+        model, train_elbos, q = util.load_model(path + str(model_id) + ".dill")
+    else:
+        return FileNotFoundError
+    
+    C = model.emissions.Cs[0]
+    d = model.emissions.ds[0]
+    
+    M_inv = np.linalg.pinv(np.linalg.pinv(C) @ C_true)
+    n = np.linalg.pinv(C) @ (d_true - d)
+    
+    for i in range(len(x_test)): 
+            x_preds = []
+            x_trues = []
+            index = list(range(10, x_test[i].shape[0]-predict_len, interval))     
+            for j, t in enumerate(index):
+                # x = C^-1 @ (y - d)
+                if hasattr(model.emissions, "mean"):
+                    x_pred = (np.log(np.exp(save_y_pred[i][j]) - 1) - d) @ np.linalg.pinv(C).T
+                else:
+                    x_pred = (save_y_pred[i][j] - d) @ np.linalg.pinv(C).T
+                x_orig = (x_pred - n) @ M_inv.T
+                x_preds.append(x_orig)
+                x_trues.append(x_test[i][t:t+predict_len, :])
+                
+            save_x_pred.append(x_preds)
+            save_x_true.append(x_trues)
+            
+    return save_x_pred, save_x_true
+
+
 def make_prediction(path, model_id, y_test, predict_len=10, interval=30, cache=1):
     '''
         I = # Trials
@@ -114,9 +167,19 @@ def make_prediction(path, model_id, y_test, predict_len=10, interval=30, cache=1
     return save_y_pred, save_y_true, train_elbos, test_elbos
 
 
-def get_across_trial_evaluation(path, model_id, y_test, cache=True):
-    save_y_pred, save_y_true, train_elbos, test_elbos = make_prediction(path, model_id, y_test, cache=cache)
+def get_across_trial_evaluation(path, model_id, y_test, cache=True, latent=False, x_test=None, C_true=None, d_true=None):
+    if model_id == None:
+        # last value model
+        save_y_pred, save_y_true = make_last_value_prediction(y_test)
+        train_elbos, test_elbos = [0], [0]
+        
+    else:
+        save_y_pred, save_y_true, train_elbos, test_elbos = make_prediction(path, model_id, y_test, cache=cache)
+        if latent == True:
+            # compare latent variable x
+            save_y_pred, save_y_true = make_latent_variable_prediction(path, model_id, x_test, save_y_pred, C_true, d_true)
 
+    
     y_trues = []
     y_preds = []
     for i in range(len(save_y_pred)):
@@ -152,15 +215,24 @@ def get_across_trial_evaluation(path, model_id, y_test, cache=True):
     return model_id, train_elbos[-1], test_elbo, eR2, R2, mae
 
 
-def get_individual_trial_evaluation(path, model_id, y_test):
-    save_y_pred, save_y_true, train_elbos, test_elbos = make_prediction(path, model_id, y_test)
+def get_individual_trial_evaluation(path, model_id, y_test, latent=False, x_test=None, C_true=None, d_true=None):
+    if model_id == None:
+        # last value model
+        save_y_pred, save_y_true = make_last_value_prediction(y_test)
+        train_elbos, test_elbos = [0], [0]
+        
+    else:
+        save_y_pred, save_y_true, train_elbos, test_elbos = make_prediction(path, model_id, y_test)
+        if latent == True:
+            # compare latent variable x
+            save_y_pred, save_y_true = make_latent_variable_prediction(path, model_id, x_test, save_y_pred, C_true, d_true)
 
     R2s = []
     maes = []
     for i in range(len(save_y_pred)):
         y_preds = np.stack(save_y_pred[i], axis=0)
         y_trues = np.stack(save_y_true[i], axis=0)
-        y_means = np.mean(y_trues[:, 0, :], axis=0)
+        y_means = np.mean(y_trues[:, :, :], axis=0)
         if isinstance(y_test[0][0, 0], np.int64):
             numerator = np.sum(np.sum(y_trues * np.log(y_trues / (y_preds + 1e-8) + 1e-8) - (y_trues - y_preds), axis=-1), axis=0)
             denominator = np.sum(np.sum(y_trues * np.log(y_trues / (y_means + 1e-8)  + 1e-8), axis=-1), axis=0)
@@ -177,6 +249,9 @@ def get_individual_trial_evaluation(path, model_id, y_test):
         R2s.append(R2)
         maes.append(mae)
 
+    R2s = np.stack(R2s, axis=0)
+    maes = np.stack(maes, axis=0)
+    
     return test_elbos, R2s, maes
     
 
@@ -263,3 +338,4 @@ def evaluate_inferred_dynamic(model, C_true, d_true):
         error /= (model.K * model.K - model.K)
     score = diff + offset + error
     return score
+

@@ -5,6 +5,7 @@ import dill
 import sys
 import matplotlib.pyplot as plt
 import util, train, evaluate, plotting
+from scipy.stats import wilcoxon
 
 ## training parameters
 predict_len = 10
@@ -84,9 +85,40 @@ if __name__ == "__main__":
     print("Best LDS score = %.3f" % evaluate.evaluate_inferred_dynamic(lds, C_true, d_true))
     print("Best rSLDS score = %.3f" % evaluate.evaluate_inferred_dynamic(rslds, C_true, d_true))
     
+    # %% compute the p value between outcomes from lds and rslds model
+    test_elbos_K1, best_R2s_K1, best_maes_K1 = evaluate.get_individual_trial_evaluation(lds_path, lds_id, y_test, False, x_test, C_true, d_true)
+    # print(np.mean(np.stack(best_R2s_K1, axis=0), axis=0)[0])
+    test_elbos_K3, best_R2s_K3, best_maes_K3 = evaluate.get_individual_trial_evaluation(rslds_path, rslds_id, y_test, False, x_test, C_true, d_true)
+    # print(np.mean(np.stack(best_R2s_K3, axis=0), axis=0)[0])
+    # best_R2s_K1 = [x[0] for x in best_R2s_K1]
+    # best_R2s_K3 = [x[0] for x in best_R2s_K3]
+    # best_maes_K1 = [x[0] for x in best_maes_K1]
+    # best_maes_K3 = [x[0] for x in best_maes_K3]
+    # stat, p_elbo = wilcoxon(test_elbos_K1, test_elbos_K3)
+    # stat, p_R2 = wilcoxon(best_R2s_K1, best_R2s_K3)
+    # stat, p_mae = wilcoxon(best_maes_K1, best_maes_K3)
+    
+    # print (p_elbo, p_R2, p_mae)
+             
+
     # %%
     _, _, _, _, R2s_lv, maes_lv = evaluate.get_across_trial_evaluation(None, None, y_test)
     
+    p_R2 = []
+    p_mae = []
+    for i in range(predict_len):
+        best_K1 = [x[i] for x in best_R2s_K1]
+        best_K3 = [x[i] for x in best_R2s_K3]
+        stat, p = wilcoxon(best_K1, best_K3)
+        p_R2.append(p)
+        
+        best_K1 = [x[i] for x in best_maes_K1]
+        best_K3 = [x[i] for x in best_maes_K3]
+        stat, p = wilcoxon(best_K1, best_K3)
+        p_mae.append(p)
+        
+    print("p value of R^2 results: ", p_R2)
+    print("p value of MAE results: ", p_mae)
     plt.plot(range(1, 11), R2s_K1, label='LDS')
     plt.plot(range(1, 11), R2s_K3, label='rSLDS')
     plt.plot(range(1, 11), R2s_lv, label='Last value')
@@ -96,6 +128,7 @@ if __name__ == "__main__":
     plt.legend()
     plt.grid(True)
     plt.show()
+    
     
     plt.plot(range(1, 11), maes_K1, label='LDS')
     plt.plot(range(1, 11), maes_K3, label='rSLDS')
@@ -107,22 +140,4 @@ if __name__ == "__main__":
     plt.grid(True)
     plt.show()
     
-    # To do: p value on the plot
-    
-    # %% compute the p value between outcomes from lds and rslds model
-    test_elbos_K1, best_R2s_K1, best_maes_K1 = evaluate.get_individual_trial_evaluation(lds_path, lds_id, y_test, False, x_test, C_true, d_true)
-    # print(np.mean(np.stack(best_R2s_K1, axis=0), axis=0)[0])
-    test_elbos_K3, best_R2s_K3, best_maes_K3 = evaluate.get_individual_trial_evaluation(rslds_path, rslds_id, y_test, False, x_test, C_true, d_true)
-    # print(np.mean(np.stack(best_R2s_K3, axis=0), axis=0)[0])
-    from scipy.stats import wilcoxon
-    best_R2s_K1 = [x[0] for x in best_R2s_K1]
-    best_R2s_K3 = [x[0] for x in best_R2s_K3]
-    best_maes_K1 = [x[0] for x in best_maes_K1]
-    best_maes_K3 = [x[0] for x in best_maes_K3]
-    stat, p_elbo = wilcoxon(test_elbos_K1, test_elbos_K3)
-    stat, p_R2 = wilcoxon(best_R2s_K1, best_R2s_K3)
-    stat, p_mae = wilcoxon(best_maes_K1, best_maes_K3)
-    
-    print (p_elbo, p_R2, p_mae)
-             
-# %%
+    # %%

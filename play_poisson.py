@@ -5,6 +5,7 @@ import dill
 import sys
 import matplotlib.pyplot as plt
 import util, train, evaluate, plotting
+from scipy.stats import wilcoxon
 
 ## training parameters
 predict_len = 10
@@ -13,9 +14,9 @@ model_num = 20
 pool_size = 5
 
 DIM = '100'
-RATE = '1'
+RATE = '0_25'
 
-_, DIM, RATE = sys.argv
+# _, DIM, RATE = sys.argv
 
 def split_data(data):
     n = data.shape[0]
@@ -67,42 +68,23 @@ if __name__ == "__main__":
     rslds_id = evaluate.select_best_model(rslds_path, y_val, model_num, pool_size)
     
     # %%
-    _, each_R2s_K1, each_maes_K1 = evaluate.get_individual_trial_evaluation(lds_path, lds_id, y_test, True, x_test, C_true, d_true)
-    _, each_R2s_K3, each_maes_K3 = evaluate.get_individual_trial_evaluation(rslds_path, rslds_id, y_test, True, x_test, C_true, d_true)
+    _, each_R2s_K1, each_maes_K1 = evaluate.get_individual_trial_evaluation(lds_path, lds_id, y_test, False, x_test, C_true, d_true)
+    _, each_R2s_K3, each_maes_K3 = evaluate.get_individual_trial_evaluation(rslds_path, rslds_id, y_test, False, x_test, C_true, d_true)
     
 
     # %%
-    _, train_elbos_K1, test_elbos_K1, eR2s_K1, R2s_K1, maes_K1 = evaluate.get_across_trial_evaluation(lds_path, lds_id, y_test, True, True, x_test, C_true, d_true)
+    _, train_elbos_K1, test_elbos_K1, eR2s_K1, R2s_K1, maes_K1 = evaluate.get_across_trial_evaluation(lds_path, lds_id, y_test, True, False, x_test, C_true, d_true)
     print("Poisson LDS")
     print("Train ELBO = %.3f | Test ELBO = %.3f | across R2 = %.4f / %.4f | individual R2 = %.4f | MAE = %.3f" %
           (train_elbos_K1, test_elbos_K1, R2s_K1[0], eR2s_K1[0], np.mean(each_R2s_K1[:, 0]), maes_K1[0]))
     
-    _, train_elbos_K3, test_elbos_K3, eR2s_K3, R2s_K3, maes_K3 = evaluate.get_across_trial_evaluation(rslds_path, rslds_id, y_test, True, True, x_test, C_true, d_true)
+    _, train_elbos_K3, test_elbos_K3, eR2s_K3, R2s_K3, maes_K3 = evaluate.get_across_trial_evaluation(rslds_path, rslds_id, y_test, True, False, x_test, C_true, d_true)
     print("Poisson 3-rSLDS")
     print("Train ELBO = %.3f | Test ELBO = %.3f | across R2 = %.4f / %.4f | individual R2 = %.4f | MAE = %.3f" %
           (train_elbos_K3, test_elbos_K3, R2s_K3[0], eR2s_K3[0], np.mean(each_R2s_K3[:, 0]), maes_K3[0]))
-
     
-    # %%
-    # plt.plot(range(1, 11), R2s_K1, label='LDS')
-    # plt.plot(range(1, 11), R2s_K3, label='rSLDS')
-    # plt.ylabel('R^2')
-    # plt.xlabel('prediction steps ahead')
-    # plt.xticks(range(1, 11))
-    # plt.legend()
-    # plt.grid(True)
-    # plt.show()
     
-    # plt.plot(range(1, 11), maes_K1, label='LDS')
-    # plt.plot(range(1, 11), maes_K3, label='rSLDS')
-    # plt.ylabel('MAE')
-    # plt.xlabel('prediction steps ahead')
-    # plt.xticks(range(1, 11))
-    # plt.legend()
-    # plt.grid(True)
-    # plt.show()
-    
-    # # %% compute the p value between outcomes from lds and rslds model
+    # %% compute the p value between outcomes from lds and rslds model
     # test_elbos_K1, best_R2s_K1, best_maes_K1 = evaluate.get_individual_trial_evaluation(lds_path, lds_id, y_test)
     # # print(np.mean(np.stack(best_R2s_K1, axis=0), axis=0)[0])
     # test_elbos_K3, best_R2s_K3, best_maes_K3 = evaluate.get_individual_trial_evaluation(rslds_path, rslds_id, y_test)
@@ -126,20 +108,58 @@ if __name__ == "__main__":
     
 
     # %% compute the p value between outcomes from lds and rslds model
-    test_elbos_K1, best_R2s_K1, best_maes_K1 = evaluate.get_individual_trial_evaluation(lds_path, lds_id, y_test, True, x_test, C_true, d_true)
+    test_elbos_K1, best_R2s_K1, best_maes_K1 = evaluate.get_individual_trial_evaluation(lds_path, lds_id, y_test, False, x_test, C_true, d_true)
     # print(np.mean(np.stack(best_R2s_K1, axis=0), axis=0)[0])
-    test_elbos_K3, best_R2s_K3, best_maes_K3 = evaluate.get_individual_trial_evaluation(rslds_path, rslds_id, y_test, True, x_test, C_true, d_true)
+    test_elbos_K3, best_R2s_K3, best_maes_K3 = evaluate.get_individual_trial_evaluation(rslds_path, rslds_id, y_test, False, x_test, C_true, d_true)
     # print(np.mean(np.stack(best_R2s_K3, axis=0), axis=0)[0])
-    from scipy.stats import wilcoxon
-    best_R2s_K1 = [x[0] for x in best_R2s_K1]
-    best_R2s_K3 = [x[0] for x in best_R2s_K3]
-    best_maes_K1 = [x[0] for x in best_maes_K1]
-    best_maes_K3 = [x[0] for x in best_maes_K3]
-    stat, p_elbo = wilcoxon(test_elbos_K1, test_elbos_K3)
-    stat, p_R2 = wilcoxon(best_R2s_K1, best_R2s_K3)
-    stat, p_mae = wilcoxon(best_maes_K1, best_maes_K3)
+    # best_R2s_K1 = [x[0] for x in best_R2s_K1]
+    # best_R2s_K3 = [x[0] for x in best_R2s_K3]
+    # best_maes_K1 = [x[0] for x in best_maes_K1]
+    # best_maes_K3 = [x[0] for x in best_maes_K3]
+    # stat, p_elbo = wilcoxon(test_elbos_K1, test_elbos_K3)
+    # stat, p_R2 = wilcoxon(best_R2s_K1, best_R2s_K3)
+    # stat, p_mae = wilcoxon(best_maes_K1, best_maes_K3)
     
-    print (p_elbo, p_R2, p_mae)
+    # print (p_elbo, p_R2, p_mae)
+    
+    # %%
+    _, _, _, _, R2s_lv, maes_lv = evaluate.get_across_trial_evaluation(None, None, y_test)
+    
+    p_R2 = []
+    p_mae = []
+    for i in range(predict_len):
+        best_K1 = [x[i] for x in best_R2s_K1]
+        best_K3 = [x[i] for x in best_R2s_K3]
+        stat, p = wilcoxon(best_K1, best_K3)
+        p_R2.append(p)
+        
+        best_K1 = [x[i] for x in best_maes_K1]
+        best_K3 = [x[i] for x in best_maes_K3]
+        stat, p = wilcoxon(best_K1, best_K3)
+        p_mae.append(p)
+        
+    print("p value of R^2 results: ", p_R2)
+    print("p value of MAE results: ", p_mae)
+    plt.plot(range(1, 11), R2s_K1, label='LDS')
+    plt.plot(range(1, 11), R2s_K3, label='rSLDS')
+    plt.plot(range(1, 11), R2s_lv, label='Last value')
+    plt.ylabel('R^2')
+    plt.xlabel('prediction steps ahead')
+    plt.xticks(range(1, 11))
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+    
+    
+    plt.plot(range(1, 11), maes_K1, label='LDS')
+    plt.plot(range(1, 11), maes_K3, label='rSLDS')
+    plt.plot(range(1, 11), maes_lv, label='Last value')
+    plt.ylabel('MAE')
+    plt.xlabel('prediction steps ahead')
+    plt.xticks(range(1, 11))
+    plt.legend()
+    plt.grid(True)
+    plt.show()
 
     # %% visualize the comparison of estimated latent dynamic between lds and rslds
     # with open(lds_path + str(lds_id) + ".dill", 'rb') as f:

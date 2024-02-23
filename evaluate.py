@@ -193,7 +193,7 @@ def get_across_trial_evaluation(path, model_id, y_test, cache=True, latent=False
     mae = np.mean(np.linalg.norm(y_preds - y_trues, ord=2, axis=-1), axis=0)
     test_elbo = np.mean(test_elbos)
 
-    if isinstance(y_test[0][0, 0], np.int64):
+    if isinstance(y_test[0][0, 0], np.int64) and latent == False:
         y_means = np.mean(y_trues[:, :, :], axis=0)
         _numerator = 0
         for i in range(y_trues.shape[0]):
@@ -233,7 +233,7 @@ def get_individual_trial_evaluation(path, model_id, y_test, latent=False, x_test
         y_preds = np.stack(save_y_pred[i], axis=0)
         y_trues = np.stack(save_y_true[i], axis=0)
         y_means = np.mean(y_trues[:, :, :], axis=0)
-        if isinstance(y_test[0][0, 0], np.int64):
+        if isinstance(y_test[0][0, 0], np.int64) and latent == False:
             numerator = np.sum(np.sum(y_trues * np.log(y_trues / (y_preds + 1e-8) + 1e-8) - (y_trues - y_preds), axis=-1), axis=0)
             denominator = np.sum(np.sum(y_trues * np.log(y_trues / (y_means + 1e-8)  + 1e-8), axis=-1), axis=0)
             R2 = 1 - numerator / (denominator + 1e-8) 

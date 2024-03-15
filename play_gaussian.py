@@ -61,8 +61,8 @@ if __name__ == "__main__":
     rslds_id = evaluate.select_best_model(rslds_path, y_val, model_num, pool_size)
     
     # %%
-    _, each_R2s_K1, each_maes_K1 = evaluate.get_individual_trial_evaluation(lds_path, lds_id, y_test, False, x_test, C_true, d_true)
-    _, each_R2s_K3, each_maes_K3 = evaluate.get_individual_trial_evaluation(rslds_path, rslds_id, y_test, False, x_test, C_true, d_true)
+    _, each_eR2s_K1, each_R2s_K1, each_maes_K1 = evaluate.get_individual_trial_evaluation(lds_path, lds_id, y_test, False, x_test, C_true, d_true)
+    _, each_eR2s_K3, each_R2s_K3, each_maes_K3 = evaluate.get_individual_trial_evaluation(rslds_path, rslds_id, y_test, False, x_test, C_true, d_true)
     
     # %%
     _, train_elbos_K1, test_elbos_K1, eR2s_K1, R2s_K1, maes_K1 = evaluate.get_across_trial_evaluation(lds_path, lds_id, y_test, True, False, x_test, C_true, d_true)
@@ -86,9 +86,9 @@ if __name__ == "__main__":
     print("Best rSLDS score = %.3f" % evaluate.evaluate_inferred_dynamic(rslds, C_true, d_true))
     
     # %% compute the p value between outcomes from lds and rslds model
-    test_elbos_K1, best_R2s_K1, best_maes_K1 = evaluate.get_individual_trial_evaluation(lds_path, lds_id, y_test, False, x_test, C_true, d_true)
+    test_elbos_K1, best_eR2s_K1, best_R2s_K1, best_maes_K1 = evaluate.get_individual_trial_evaluation(lds_path, lds_id, y_test, False, x_test, C_true, d_true)
     # print(np.mean(np.stack(best_R2s_K1, axis=0), axis=0)[0])
-    test_elbos_K3, best_R2s_K3, best_maes_K3 = evaluate.get_individual_trial_evaluation(rslds_path, rslds_id, y_test, False, x_test, C_true, d_true)
+    test_elbos_K3, best_eR2s_K3, best_R2s_K3, best_maes_K3 = evaluate.get_individual_trial_evaluation(rslds_path, rslds_id, y_test, False, x_test, C_true, d_true)
     # print(np.mean(np.stack(best_R2s_K3, axis=0), axis=0)[0])
     # best_R2s_K1 = [x[0] for x in best_R2s_K1]
     # best_R2s_K3 = [x[0] for x in best_R2s_K3]

@@ -79,10 +79,10 @@ def make_prediction(path, model_id, y_test, predict_len=10, interval=30, cache=1
         O = # prediction steps ahead
         N = # Neurons
         
-        >> y_trues (Dim = N * T, O, N): 
+        >> y_trues (Dim = I * T, O, N): 
             The ground truth firing rates or spike counts.
         
-        >> y_preds (Dim = N * T, O, N):
+        >> y_preds (Dim = I * T, O, N):
             The predicted firing rates or spike counts.
             
         >> y_means: (Dim = N):
@@ -179,11 +179,11 @@ def get_across_trial_evaluation(path, model_id, y_test, cache=True, latent=False
             # compare latent variable x
             save_y_pred, save_y_true = make_latent_variable_prediction(path, model_id, x_test, save_y_pred, C_true, d_true)
 
-    
+    # stack the prediction and groundtruth observation across trials and time
     y_trues = []
     y_preds = []
-    for i in range(len(save_y_pred)):
-        for t in range(len(save_y_pred[i])):
+    for i in range(len(save_y_pred)): # trial
+        for t in range(len(save_y_pred[i])): # time bin
             y_preds.append(save_y_pred[i][t])
             y_trues.append(save_y_true[i][t])
 
@@ -194,6 +194,8 @@ def get_across_trial_evaluation(path, model_id, y_test, cache=True, latent=False
     test_elbo = np.mean(test_elbos)
 
     if isinstance(y_test[0][0, 0], np.int64) and latent == False:
+        # Poisson case
+        # compute the numerator of expected R^2
         y_means = np.mean(y_trues[:, :, :], axis=0)
         _numerator = 0
         for i in range(y_trues.shape[0]):
@@ -205,6 +207,7 @@ def get_across_trial_evaluation(path, model_id, y_test, cache=True, latent=False
         eR2 = 1 - _numerator / (denominator + 1e-8) 
         R2 = 1 - numerator / (denominator + 1e-8) 
     else:
+        # Gaussian case
         numerator = np.linalg.norm(y_preds - y_trues, ord=2, axis=-1)
         numerator = np.sum(numerator * numerator, axis=0)
         denominator = np.linalg.norm(y_trues - np.average(y_trues, axis=0), ord=2, axis=-1)
@@ -227,32 +230,50 @@ def get_individual_trial_evaluation(path, model_id, y_test, latent=False, x_test
             # compare latent variable x
             save_y_pred, save_y_true = make_latent_variable_prediction(path, model_id, x_test, save_y_pred, C_true, d_true)
 
+
+    eR2s = []
     R2s = []
     maes = []
+    # for each trial
     for i in range(len(save_y_pred)):
         y_preds = np.stack(save_y_pred[i], axis=0)
         y_trues = np.stack(save_y_true[i], axis=0)
-        y_means = np.mean(y_trues[:, :, :], axis=0)
+        y_means = np.mean(y_trues, axis=0)
+
         if isinstance(y_test[0][0, 0], np.int64) and latent == False:
+            # Poisson case
+            # compute the numerator of expected R^2
+            _numerator = 0
+            for j in range(y_trues.shape[0]):
+                for n in range(y_trues.shape[-1]):
+                    _numerator += compute_approximate_sum((y_preds[j, 0, n]))
+            
+            # compute the numerator of data-based R^2
             numerator = np.sum(np.sum(y_trues * np.log(y_trues / (y_preds + 1e-8) + 1e-8) - (y_trues - y_preds), axis=-1), axis=0)
             denominator = np.sum(np.sum(y_trues * np.log(y_trues / (y_means + 1e-8)  + 1e-8), axis=-1), axis=0)
+            eR2 = 1 - _numerator / (denominator + 1e-8) 
             R2 = 1 - numerator / (denominator + 1e-8) 
         else:
+            # Gaussian case
             numerator = np.linalg.norm(y_preds - y_trues, ord=2, axis=-1)
             numerator = np.sum(numerator * numerator, axis=0)
-            denominator = np.linalg.norm(y_trues - np.average(y_trues, axis=0), ord=2, axis=-1)
+            denominator = np.linalg.norm(y_trues - y_means, ord=2, axis=-1)
             denominator = np.sum(denominator * denominator, axis=0)
             R2 = 1 - numerator / (denominator + 1e-8)
+            eR2 = [0]
         
         mae = np.mean(np.linalg.norm(y_preds - y_trues, ord=2, axis=-1), axis=0)
-            
+        
+        eR2s.append(eR2)
         R2s.append(R2)
         maes.append(mae)
 
+    eR2s = np.stack(eR2s, axis=0)
     R2s = np.stack(R2s, axis=0)
     maes = np.stack(maes, axis=0)
+    # will be averaged outside the function to compute the overall performance
     
-    return test_elbos, R2s, maes
+    return test_elbos, eR2s, R2s, maes
     
 
 def select_best_model(path, y_val, model_num, pool_size):

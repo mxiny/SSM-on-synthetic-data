@@ -20,7 +20,7 @@ bs = np.stack([np.array([0.05, 0.05]), 0.5*att_top, 0.5*att_bottom])
 # Noise
 obs_dims = [200, 100, 50, 25, 10]
 Qs = [0.01]
-Ss = [0, 0.01, 0.02, 0.05, 0.1, 0.2]
+Ss = [0, 0.01, 0.02, 0.05, 0.1, 0.2, 3.2]
 
 # Adjust the average firing rate of poisson data
 target_rates = [0.25]
@@ -178,7 +178,7 @@ if __name__ == "__main__":
     if not os.path.exists(data_path):
         os.mkdir(data_path)
 
-    # ax = plotting.plot_true_dynamics(As, bs)
+    ax = plotting.plot_synthetic_dynamics(As, bs)
     # ax.set_title("True latent dynamic")
     # plt.show()
     obs_types = ["poisson"]

@@ -11,7 +11,7 @@ sns.set_style("white")
 sns.set_context("talk")
 
 def plot_data(x_train, title, xlabel, ylabel):
-    fig, ax = plt.subplots(1, 1)
+    plt.figure(figsize=(5, 5))
     trial_num = x_train.shape[0]
     trial_len = x_train.shape[1]
     plt.title(title)

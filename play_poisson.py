@@ -13,10 +13,11 @@ latent_dim = 2
 model_num = 20
 pool_size = 5
 
-DIM = '50'
-RATE = '2'
+DIM = '25'
+RATE = '1'
 
 # _, DIM, RATE = sys.argv
+
 
 def split_data(data):
     n = data.shape[0]
@@ -61,16 +62,21 @@ if __name__ == "__main__":
     lds_path = path_prefix + "models/poisson/ObsDim" + DIM + "_Q0_01_Rate" + RATE + "_K1/"
     rslds_path = path_prefix + "models/poisson/ObsDim" + DIM + "_Q0_01_Rate" + RATE + "_K3/"
     
-    # train.train_models(lds_path, y_train, latent_dim, 1, model_num, 50, pool_size)
-    # train.train_models(rslds_path, y_train, latent_dim, 3, model_num, 150, pool_size)
+    train.train_models(lds_path, y_train, latent_dim, 1, model_num, 50, pool_size)
+    train.train_models(rslds_path, y_train, latent_dim, 3, model_num, 150, pool_size)
 
-    lds_id = evaluate.select_best_model(lds_path, y_val, model_num, pool_size)
-    rslds_id = evaluate.select_best_model(rslds_path, y_val, model_num, pool_size)
-    
+    # lds_id = evaluate.select_best_model(lds_path, y_val, model_num, pool_size)
+    # rslds_id = evaluate.select_best_model(rslds_path, y_val, model_num, pool_size)
+    lds_id = 9
+    rslds_id = 13
+        
     # %%
+    import time
+    t = time.time()
     _, each_eR2s_K1, each_R2s_K1, each_maes_K1 = evaluate.get_individual_trial_evaluation(lds_path, lds_id, y_test, False, x_test, C_true, d_true)
+    print("LDS time cost = ", time.time() - t)
     _, each_eR2s_K3, each_R2s_K3, each_maes_K3 = evaluate.get_individual_trial_evaluation(rslds_path, rslds_id, y_test, False, x_test, C_true, d_true)
-    
+    print("rSLDS time cost = ", time.time() - t)
 
     # %%
     _, train_elbos_K1, test_elbos_K1, eR2s_K1, R2s_K1, maes_K1 = evaluate.get_across_trial_evaluation(lds_path, lds_id, y_test, True, False, x_test, C_true, d_true)
@@ -85,18 +91,18 @@ if __name__ == "__main__":
     
     # %%
     
-    with open(lds_path + str(lds_id) + ".dill", 'rb') as f:
-        lds = dill.load(f)
+    # with open(lds_path + str(lds_id) + ".dill", 'rb') as f:
+    #     lds = dill.load(f)
 
-    with open(rslds_path + str(rslds_id) + ".dill", 'rb') as f:
-        rslds = dill.load(f)
-    print("Best LDS score = %.3f" % evaluate.evaluate_inferred_dynamic(lds, C_true, d_true))
-    print("Best rSLDS score = %.3f" % evaluate.evaluate_inferred_dynamic(rslds, C_true, d_true))
+    # with open(rslds_path + str(rslds_id) + ".dill", 'rb') as f:
+    #     rslds = dill.load(f)
+    # print("Best LDS score = %.3f" % evaluate.evaluate_inferred_dynamic(lds, C_true, d_true))
+    # print("Best rSLDS score = %.3f" % evaluate.evaluate_inferred_dynamic(rslds, C_true, d_true))
     
-    # %% compute the p value between outcomes from lds and rslds model
-    test_elbos_K1, best_eR2s_K1, best_R2s_K1, best_maes_K1 = evaluate.get_individual_trial_evaluation(lds_path, lds_id, y_test, False, x_test, C_true, d_true)
+    # # %% compute the p value between outcomes from lds and rslds model
+    # test_elbos_K1, best_eR2s_K1, best_R2s_K1, best_maes_K1 = evaluate.get_individual_trial_evaluation(lds_path, lds_id, y_test, False, x_test, C_true, d_true)
     # print(np.mean(np.stack(best_R2s_K1, axis=0), axis=0)[0])
-    test_elbos_K3, best_eR2s_K3, best_R2s_K3, best_maes_K3 = evaluate.get_individual_trial_evaluation(rslds_path, rslds_id, y_test, False, x_test, C_true, d_true)
+    # test_elbos_K3, best_eR2s_K3, best_R2s_K3, best_maes_K3 = evaluate.get_individual_trial_evaluation(rslds_path, rslds_id, y_test, False, x_test, C_true, d_true)
     # print(np.mean(np.stack(best_R2s_K3, axis=0), axis=0)[0])
     # best_R2s_K1 = [x[0] for x in best_R2s_K1]
     # best_R2s_K3 = [x[0] for x in best_R2s_K3]
@@ -109,45 +115,103 @@ if __name__ == "__main__":
     # print (p_elbo, p_R2, p_mae)
     
     # %%
-    _, _, _, _, R2s_lv, maes_lv = evaluate.get_across_trial_evaluation(None, None, y_test)
+    # _, _, _, _, R2s_lv, maes_lv = evaluate.get_across_trial_evaluation(None, None, y_test)
     
-    p_R2 = []
-    p_mae = []
-    for i in range(predict_len):
-        best_K1 = [x[i] for x in best_R2s_K1]
-        best_K3 = [x[i] for x in best_R2s_K3]
-        stat, p = wilcoxon(best_K1, best_K3)
-        p_R2.append(p)
+    # p_R2 = []
+    # p_mae = []
+    # for i in range(predict_len):
+    #     best_K1 = [x[i] for x in best_R2s_K1]
+    #     best_K3 = [x[i] for x in best_R2s_K3]
+    #     stat, p = wilcoxon(best_K1, best_K3)
+    #     p_R2.append(p)
         
-        best_K1 = [x[i] for x in best_maes_K1]
-        best_K3 = [x[i] for x in best_maes_K3]
-        stat, p = wilcoxon(best_K1, best_K3)
-        p_mae.append(p)
-        
-    print("p value of R^2 results: ", p_R2)
-    print("p value of MAE results: ", p_mae)
-    plt.plot(range(1, 11), R2s_K1, label='LDS')
-    plt.plot(range(1, 11), R2s_K3, label='rSLDS')
-    # plt.plot(range(1, 11), R2s_lv, label='Last value')
-    plt.ylabel('R squared')
-    plt.xlabel('Prediction steps ahead')
-    plt.xticks(range(1, 11))
-    plt.legend()
-    plt.grid(True)
-    plt.show()
+    #     best_K1 = [x[i] for x in best_maes_K1]
+    #     best_K3 = [x[i] for x in best_maes_K3]
+    #     stat, p = wilcoxon(best_K1, best_K3)
+    #     p_mae.append(p)
+    # %%
+    # import mpl_toolkits.axisartist as axisartist
+    # util.latent_space_transform(lds, C_true, d_true)
+    # util.latent_space_transform(rslds, C_true, d_true)
+    
+    # As_true = np.stack([np.eye(latent_dim), 0.5*np.eye(latent_dim), 0.5*np.eye(latent_dim)])
+    
+    # A0 = lds.dynamics.As[0]
+    
+    # A1 = rslds.dynamics.As[0]
+    # A2 = rslds.dynamics.As[1]
+    # A3 = rslds.dynamics.As[2]
+    
+    # fig = plt.figure(figsize=(10, 10))
+    # ax = axisartist.Subplot(fig, 111)
+    # fig.add_axes(ax)
+    # ax.set_title('Eigenvalues of A matrices')
+    # ax.axis[:].set_visible(False)
+    # # ax.set_xlabel('real')
+    # # ax.set_ylabel('imag')
+    # ax.set_xticks([-1, 0, 1])
+    # ax.set_yticks([-1, 0, 1])
+    # ax.add_patch(plt.Circle((0, 0), 1, color='black', fill=False))
+    # ax.axis["x"] = ax.new_floating_axis(0, 0)
+    # ax.axis["y"] = ax.new_floating_axis(1, 0)
+    # for ev in np.linalg.eigvals(As_true[0]):
+    #     ax.scatter(np.real(ev), np.imag(ev), s=500, facecolors='none', color='g', linewidths=5.0, alpha=0.3)
+    # ax.scatter(np.real(ev), np.imag(ev), s=500, facecolors='none', color='g', linewidths=5.0, alpha=0.3, label='true mode 1')
+    
+    # for ev in np.linalg.eigvals(As_true[1]):
+    #     ax.scatter(np.real(ev), np.imag(ev), s=500, facecolors='none', edgecolors='g', linewidths=5.0, alpha=0.3)
+    # ax.scatter(np.real(ev), np.imag(ev), s=500, facecolors='none', edgecolors='g', linewidths=5.0, alpha=0.3, label='true mode 2')
+    
+    # for ev in np.linalg.eigvals(As_true[1]):
+    #     ax.scatter(np.real(ev), np.imag(ev), s=500, facecolors='none', edgecolors='g', linewidths=5.0, alpha=0.3)
+    # ax.scatter(np.real(ev), np.imag(ev), s=500, facecolors='none', edgecolors='g', linewidths=5.0, alpha=0.3, label='true mode 3')
     
     
-    plt.plot(range(1, 11), maes_K1, label='LDS')
-    plt.plot(range(1, 11), maes_K3, label='rSLDS')
-    # plt.plot(range(1, 11), maes_lv, label='Last value')
-    plt.ylabel('MAE')
-    plt.xlabel('Prediction steps ahead')
-    plt.xticks(range(1, 11))
-    plt.legend()
-    plt.grid(True)
-    plt.show()
+    # for ev in np.linalg.eigvals(lds.dynamics.As[0]):
+    #     print(np.linalg.norm([np.real(ev), np.imag(ev)], ord=2))
+    #     ax.scatter(np.real(ev), np.imag(ev), s=500, marker='x', color='r', linewidths=5.0, alpha=0.3)
+    # ax.scatter(np.real(ev), np.imag(ev), s=500, marker='x', color='r', linewidths=5.0, alpha=0.3, label='lds')
+    
+    # for ev in np.linalg.eigvals(A1):
+    #     print(np.linalg.norm([np.real(ev), np.imag(ev)], ord=2))
+    #     ax.scatter(np.real(ev), np.imag(ev), s=500, facecolors='none', color='b', linewidths=5.0, alpha=0.3)
+    # ax.scatter(np.real(ev), np.imag(ev), s=500, facecolors='none', color='b', linewidths=5.0, alpha=0.3, label='inferred rslds 1')
+    # for ev in np.linalg.eigvals(A2):
+    #     print(np.linalg.norm([np.real(ev), np.imag(ev)], ord=2))
+    #     ax.scatter(np.real(ev), np.imag(ev), s=500, facecolors='none', edgecolors='b', linewidths=5.0, alpha=0.3)
+    # ax.scatter(np.real(ev), np.imag(ev), s=500, facecolors='none', edgecolors='b', linewidths=5.0, alpha=0.3, label='inferred rslds 2')
+    # for ev in np.linalg.eigvals(A3):
+    #     print(np.linalg.norm([np.real(ev), np.imag(ev)], ord=2))
+    #     ax.scatter(np.real(ev), np.imag(ev), s=500, facecolors='none', edgecolors='b', linewidths=5.0, alpha=0.3)
+    # ax.scatter(np.real(ev), np.imag(ev), s=500, facecolors='none', edgecolors='b', linewidths=5.0, alpha=0.3, label='inferred rslds 3')
+    # ax.legend()
+    # plt.show()
+    
+    # %%
+    # print("p value of R^2 results: ", p_R2)
+    # print("p value of MAE results: ", p_mae)
+    # plt.plot(range(1, 11), R2s_K1, label='LDS')
+    # plt.plot(range(1, 11), R2s_K3, label='rSLDS')
+    # # plt.plot(range(1, 11), R2s_lv, label='Last value')
+    # plt.ylabel('R squared')
+    # plt.xlabel('Prediction steps ahead')
+    # plt.xticks(range(1, 11))
+    # plt.legend()
+    # plt.grid(True)
+    # plt.show()
+    
+    
+    # plt.plot(range(1, 11), maes_K1, label='LDS')
+    # plt.plot(range(1, 11), maes_K3, label='rSLDS')
+    # # plt.plot(range(1, 11), maes_lv, label='Last value')
+    # plt.ylabel('MAE')
+    # plt.xlabel('Prediction steps ahead')
+    # plt.xticks(range(1, 11))
+    # plt.legend()
+    # plt.grid(True)
+    # plt.show()
 
-    # %% visualize the comparison of estimated latent dynamic between lds and rslds
+    # # %% visualize the comparison of estimated latent dynamic between lds and rslds
     # with open(lds_path + str(lds_id) + ".dill", 'rb') as f:
     #     lds = dill.load(f)
 
@@ -160,8 +224,8 @@ if __name__ == "__main__":
     # # %% plot the estimated latent vector field
     # util.latent_space_transform(lds, C_true, d_true)
     # util.latent_space_transform(rslds, C_true, d_true)
-    # plotting.plot_most_likely_dynamics(lds, xlim=(-5, 10), ylim=(-5, 10))
-    # plotting.plot_most_likely_dynamics(rslds, xlim=(-5, 10), ylim=(-5, 10))
+    # plotting.plot_most_likely_dynamics(lds, xlim=(-50, 50), ylim=(-50, 50))
+    # plotting.plot_most_likely_dynamics(rslds, xlim=(-50, 50), ylim=(-50, 50))
     
     # %%
     # lds_err = 0
@@ -250,10 +314,23 @@ if __name__ == "__main__":
     
 
     # # %% visualize latent dynamics of all trained models
-    # for i in range(12):
+    # goods = 0
+    # bads = 0
+    # excellents = 0
+    
+    # for i in range(model_num):
     #     with open(rslds_path + str(i) + ".dill", 'rb') as f:
     #         rslds = dill.load(f)
     #     util.latent_space_transform(rslds, C_true, d_true)
-    #     plotting.plot_most_likely_dynamics(rslds, xlim=(-5, 10), ylim=(-5, 10))
-        
+    #     # plotting.plot_most_likely_dynamics(rslds, xlim=(-5, 10), ylim=(-5, 10))
+    #     score = evaluate.evaluate_inferred_dynamic(rslds, C_true, d_true)
+    #     if score < 0.5:
+    #         excellents += 1
+    #     elif score > 2:
+    #         bads += 1
+    #     else:
+    #         goods += 1
+    
+    # print(excellents, goods, bads)
+    
     # %%

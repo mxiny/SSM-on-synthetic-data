@@ -19,13 +19,13 @@ def compute_approximate_sum(mu):
     return np.exp(-mu) * appr_term - mu * np.log(mu + 1e-8)
 
 
-def make_last_value_prediction(y_test, predict_len=10, interval=30):
+def make_last_value_prediction(y_test, predict_len=10, interval=1):
     save_y_pred = []
     save_y_true = []
     for i in range(len(y_test)): 
             y_preds = []
             y_trues = []
-            index = list(range(10, y_test[i].shape[0]-predict_len, interval))     
+            index = list(range(1, y_test[i].shape[0]-predict_len, interval))     
             for t in index:
                 r_pred = np.repeat(y_test[i][t-1][None, :], predict_len, axis=0)
                 y_preds.append(r_pred)
@@ -37,7 +37,7 @@ def make_last_value_prediction(y_test, predict_len=10, interval=30):
     return save_y_pred, save_y_true
 
 
-def make_latent_variable_prediction(path, model_id, x_test, save_y_pred, C_true, d_true, predict_len=10, interval=30):
+def make_latent_variable_prediction(path, model_id, x_test, save_y_pred, C_true, d_true, predict_len=10, interval=1):
     save_x_pred = []
     save_x_true = []
     
@@ -55,11 +55,11 @@ def make_latent_variable_prediction(path, model_id, x_test, save_y_pred, C_true,
     for i in range(len(x_test)): 
             x_preds = []
             x_trues = []
-            index = list(range(10, x_test[i].shape[0]-predict_len, interval))     
+            index = list(range(1, x_test[i].shape[0]-predict_len, interval))     
             for j, t in enumerate(index):
                 # x = C^-1 @ (y - d)
                 if hasattr(model.emissions, "mean"):
-                    x_pred = (np.log(np.exp(save_y_pred[i][j]) - 1) - d) @ np.linalg.pinv(C).T
+                    x_pred = (np.log(np.exp(save_y_pred[i][j]) - 1)  - d) @ np.linalg.pinv(C).T
                 else:
                     x_pred = (save_y_pred[i][j] - d) @ np.linalg.pinv(C).T
                 x_orig = (x_pred - n) @ M_inv.T
@@ -72,7 +72,7 @@ def make_latent_variable_prediction(path, model_id, x_test, save_y_pred, C_true,
     return save_x_pred, save_x_true
 
 
-def make_prediction(path, model_id, y_test, predict_len=10, interval=30, cache=1):
+def make_prediction(path, model_id, y_test, predict_len=10, interval=1, cache=1):
     '''
         I = # Trials
         T = # Timepoints
@@ -119,7 +119,7 @@ def make_prediction(path, model_id, y_test, predict_len=10, interval=30, cache=1
 
             y_preds = []
             y_trues = []
-            index = list(range(10, y_test[i].shape[0]-predict_len, interval))     
+            index = list(range(1, y_test[i].shape[0]-predict_len, interval))     
             for t in index:
                 elbo_test, q_test = model.approximate_posterior(y_test[i][:t],                                                       
                                                             num_iters=num_iters,
@@ -159,7 +159,7 @@ def make_prediction(path, model_id, y_test, predict_len=10, interval=30, cache=1
         save_y_true = []
         for i in range(len(y_test)): 
             y_trues = []
-            index = list(range(10, y_test[i].shape[0]-predict_len, interval))     
+            index = list(range(1, y_test[i].shape[0]-predict_len, interval))     
             for t in index:
                 y_trues.append(y_test[i][t:t+predict_len, :])
             save_y_true.append(y_trues)
